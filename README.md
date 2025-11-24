@@ -1,40 +1,30 @@
-# DCGAN with Modular PyTorch Components
+# DCGAN Modularization Project
 
-This repository is an adaptation of the [PyTorch DCGAN tutorial](https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html) that keeps the modeling ideas intact while moving the implementation out of a single notebook and into testable, reusable Python modules. The notebook `train_run.ipynb` demonstrates the workflow end-to-end, while the actual training logic lives inside standard classes and helper functions.
+This repository shows how I refactored the [PyTorch DCGAN tutorial](https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html) into conventional Python modules plus a single demonstration notebook. Rather than defining everything inline inside a notebook, I separated the configuration, dataset, models, utils, and training helpers so they can be reused or tested like any other package code. The notebook `train_run.ipynb` is the sole entry point for running experiments—`train.py` only exists so that the training helpers can be imported, not executed directly.
 
-## How This Project Differs from the Tutorial
-- `config.py`, `model.py`, `dataset.py`, and `train.py` each encapsulate a single concern, so hyperparameters, model definitions, datasets, and training utilities can be re-used from scripts or notebooks alike.
-- The notebook calls into these modules instead of redefining layers, transforms, or training loops inline, which keeps exploratory work focused on experiments instead of boilerplate.
-- Utility helpers such as `utils.py::weights_init` and `train.train_one_epoch` make it easier to write tests or plug the components into other projects (e.g., CLI training scripts or services).
+## What Makes This Different from the Tutorial
+- Each component lives in its own file: `config.py`, `dataset.py`, `model.py`, `utils.py`, and `train.py`. That structure makes it easier to unit test, swap datasets, or move the training loop into another project.
+- The notebook just orchestrates these modules, which keeps the experimental narrative clean while still giving the flexibility of Python functions/classes.
+- The code mirrors the DCGAN architecture from the tutorial, but it is organized in a way that feels closer to production code—standard modules, reusable classes, and helper utilities.
 
-## Key Modeling Notes
-- **Generator activation (`model.py:33`)** – The last layer is a `tanh`, which maps pixel intensities to `[-1, 1]`. This matches the tutorial’s recommendation and the pre-processing pipeline that normalizes real images into the same range. Without `tanh`, the generator’s outputs would not align with the discriminator’s input distribution, making convergence unstable.
-- **Weight initialization (`utils.py:4`)** – Both generator and discriminator layers are initialized with a zero-mean normal distribution (std `0.02`), while batch norm gains are centered around `1.0`. Initializing weights this way prevents the discriminator from overpowering the generator early on and mirrors the heuristic used in the original DCGAN paper.
-- **Loss function (`train.py:34`)** – Training uses binary cross-entropy (`nn.BCELoss`) with real labels set to `1` and fake labels set to `0`. The discriminator maximizes `log D(x) + log (1 - D(G(z)))`, and the generator minimizes `log (1 - D(G(z)))` (equivalently maximizing `log D(G(z))`) by relabeling its outputs as real. Tracking `G_losses` and `D_losses` helps spot divergence or mode collapse.
+## Modeling Notes I Care About
+- **Generator output (`model.py:33`)** — The final activation is `tanh` so images are emitted in the `[-1, 1]` range, matching the normalization applied to the real dataset. This alignment keeps the discriminator from trivially rejecting synthetic samples.
+- **Weight initialization (`utils.py:4`)** — Every conv layer starts with a zero-mean, `0.02` std normal distribution, while batch norm scales start around `1.0`. This follows the DCGAN paper’s heuristic and prevents the discriminator from immediately saturating.
+- **Loss function (`train.py:34`)** — I stay with `nn.BCELoss` and the classic GAN objective (`log D(x) + log(1 - D(G(z)))`). The training loop tracks generator and discriminator losses so it’s easy to spot divergence or mode collapse as the notebook runs.
 
-## Repository Layout
-- `config.py` – Simple dataclass-style container for paths, optimizer settings, latent size, etc. Update `dataroot` before training.
-- `dataset.py` – A `torch.utils.data.Dataset` that glob-loads JPEG faces and applies any torchvision transforms passed from the notebook or a script.
-- `model.py` – Generator and discriminator modules mirroring the tutorial’s topology with transposed convolutions and batch norm.
-- `utils.py` – Contains the custom weight initializer that is applied before training starts.
-- `train.py` – Training loop split into `train_one_epoch` (single pass with loss bookkeeping) and `train` (epoch orchestration plus visualization hooks).
-- `train_run.ipynb` – The notebook used to showcase data loading, training, and visualization while relying on the reusable modules above.
+## Repository Guide
+- `config.py` — Hyperparameters, dataset paths, optimizer settings, GPU count, etc.
+- `dataset.py` — A simple `torch.utils.data.Dataset` that glob-loads JPEG faces and applies transforms passed in from the notebook.
+- `model.py` — Generator and discriminator modules lifted from the tutorial, implemented as standard `nn.Module` classes.
+- `utils.py` — Contains the custom weight initialization routine.
+- `train.py` — Houses `train_one_epoch` and `train` helper functions. Do **not** run this file directly; import these helpers inside `train_run.ipynb`.
+- `train_run.ipynb` — The one place to interact with the project. Open it, configure transforms/dataloaders, and call the helpers above to train and visualize progress.
+- `environment.yml` — Optional Conda environment spec for reproducing my setup.
 
-## Getting Started
-1. Create the environment defined in `environment.yml`, or install PyTorch, torchvision, matplotlib, pandas, and Pillow manually.
-2. Place your dataset under the folder referenced by `Config.dataroot` (default points to a CelebA extract).
-3. From a terminal run:
-   ```bash
-   python train.py
-   ```
-   The notebook can also be opened to run the same training helpers interactively.
+## How to Use the Notebook
+1. Create an environment with PyTorch, torchvision, matplotlib, pandas, and Pillow (the provided `environment.yml` works with Conda or Mamba).
+2. Update `Config.dataroot` so it points to your local CelebA (or similar) dataset path.
+3. Launch Jupyter / VS Code / Colab with `train_run.ipynb`.
+4. Follow the notebook cells to instantiate the config, dataset, data loader, models, and training loop. All heavy lifting happens through the modules described earlier.
 
-Once the training artifacts look good, initialize a Git repository, add a remote on GitHub, and push this codebase:
-```bash
-git init
-git add .
-git commit -m "Initial DCGAN project import"
-git remote add origin git@github.com:<username>/<repo>.git
-git push -u origin main
-```
-
+Feel free to fork this repo and adapt the modules for other GAN experiments—the notebook is there purely to showcase the flow end-to-end.
